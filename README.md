@@ -29,7 +29,16 @@ execute enviando uma argumento, nesse caso a base de dados em csv:
 
     .\codigo.exe .\Lista_de_CEPs.csv
 
-como fiz pra inicializar um repositorio e guardar os arquivos
+ 🐙🐙🐙como fiz pra inicializar um repositorio e guardar os arquivos🐙🐙🐙 (OBS: só pra mim lembrar)
 
     git init
 
+    git add .
+
+    commit -m "Primeiro commit: configuracao inicial do projeto"
+
+    git remote add origin https://github.com/Helenyukari/Trabalho2_ED_PerformanceHash.git
+
+    branch -M main
+    
+    git push -u origin main
