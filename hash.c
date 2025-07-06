@@ -47,7 +47,6 @@ int calcular_posicao(thash *h, const char *key, int i) {
         return (h1 + i) % h->max;
 }
 
-
 // Insere hash simples e hash dupla (Ajustado)
 int hash_insere(thash *h, void *bucket) {
 
@@ -68,7 +67,9 @@ int hash_insere(thash *h, void *bucket) {
         for (int i = 0; i < max_antigo; i++) {
             if (tabela_antiga[i] != 0 && tabela_antiga[i] != h->deleted) {
                 void *reg = (void *)tabela_antiga[i];
-                hash_insere(h, reg);  // reinsere o dado na nova tabela
+                if (hash_insere(h, reg) != EXIT_SUCCESS) {
+                    free(reg); // Libera se a reinserção falhar
+                }
             }
         }
 
@@ -151,47 +152,30 @@ void *hash_busca(thash *h, const char *key) {
 
 /* ajustado com o calculo do h1 e h2 */
 int hash_remove(thash *h, const char *key) {
-    uint32_t h1 = _h1(key, h->max);
-    uint32_t h2 = _h2(key, h->max);
-
-   int pos;
+    int pos;
     for (int i = 0; i < h->max; i++) {
-        // if (h->tipo_hash == 1)
-        //     pos = (h1 + i * h2) % h->max; // hash dupla
-        // else
-        //     pos = (h1 + i) % h->max;      // hash simples
         pos = calcular_posicao(h, key, i);
 
         if (h->table[pos] != 0) {
             void *reg = (void *) h->table[pos];
             if (strcmp(h->get_key(reg), key) == 0) {
-                free(reg);
                 h->table[pos] = h->deleted;
                 h->size--;
                 return EXIT_SUCCESS;
             }  
-        }
-        else{
-            return EXIT_FAILURE; // trata a colisão, se estiver vazia não encontrou
+        } else {
+            return EXIT_FAILURE; // não encontrado
         }
     }
-
     return EXIT_FAILURE;
 }
 
-/*não alterado*/
 void hash_apaga(thash *h){
-    int pos;
-    for(pos =0;pos< h->max;pos++){
-        if (h->table[pos] != 0){
-            if (h->table[pos]!=h->deleted){
-                free((void *)h->table[pos]);
-            }
-        }
-    }
     free(h->table);
+    h->table = NULL;
+    h->max = 0;
+    h->size = 0;
 }
-
 //Primeira alteração: cep,  nome da cidade e o estado.
 typedef struct{
     char  cep_chave[6]; // a chave guarda os 5 primeiros numero do cep
@@ -216,8 +200,7 @@ void * aloca_reg(char * nome, char * cep, char * estado){
     return reg;
 }
 
-//LÊ o Arquivo e guarda na hash --> modifiquei e coloquei pra busca tmb
-int carregar_ceps(const char *arquivo_csv, thash *h) {
+int insere_ceps(const char *arquivo_csv, thash *h, void **registros, int *total_reg) {
     FILE *fp = fopen(arquivo_csv, "r");
     if (!fp) {
         perror("Erro ao abrir arquivo");
@@ -226,16 +209,10 @@ int carregar_ceps(const char *arquivo_csv, thash *h) {
 
     char linha[256];
     int linha_atual = 0;
-    int qtd = 0; //aqui vamos contar qtd de registros inseridos
-
-    // Lista dos CEPs inseridos para depois buscar
-    char ceps_para_buscar[10000][6]; 
-    int total_ceps = 0;
-
-    clock_t inicio_insercao = clock();
+    int qtd = 0;
 
     while (fgets(linha, sizeof(linha), fp)) {
-        if (linha_atual++ == 0) continue; // pula cabeçalho
+        if (linha_atual++ == 0) continue;
 
         char *estado = strtok(linha, ";");
         char *cidade = strtok(NULL, ";");
@@ -243,45 +220,30 @@ int carregar_ceps(const char *arquivo_csv, thash *h) {
 
         if (estado && cidade && cep) {
             void *reg = aloca_reg(cidade, cep, estado);
-            hash_insere(h, reg);
-
-            if (total_ceps < 10000) {
-                strncpy(ceps_para_buscar[total_ceps], cep, 5);
-                ceps_para_buscar[total_ceps][5] = '\0';
-                total_ceps++;
+            if (hash_insere(h, reg) == EXIT_SUCCESS) {
+                if (*total_reg < 10000) {
+                    registros[*total_reg] = reg;
+                    (*total_reg)++;
+                }
+                qtd++;
+            } else {
+                // free(reg); // falha inserção
             }
-
-            qtd++;
         }
-
-        // if (limite > 0 && qtd >= limite) break;
     }
 
-    clock_t fim_insercao = clock();
     fclose(fp);
-
-    double tempo_insercao = (double)(fim_insercao - inicio_insercao) / CLOCKS_PER_SEC;
-
-    // --------------------- Busca --------------------
-    clock_t inicio_busca = clock();
-
-    int repeticoes = 10000;
-    for (int i = 0; i < repeticoes; i++) {
-        int indice = i % total_ceps;
-        hash_busca(h, ceps_para_buscar[indice]);
-    }
-
-    clock_t fim_busca = clock();
-    double tempo_busca = (double)(fim_busca - inicio_busca) / CLOCKS_PER_SEC;
-
-    // --------------------- Saída --------------------
-    printf("Tempo de insercao: %f segundos\n", tempo_insercao);
-    printf("Tempo de busca:    %f segundos\n", tempo_busca);
-    printf("Quantidade de elementos inseridos: %d\n", qtd);
-
-    return EXIT_SUCCESS;
+    return qtd;
 }
 
+void realiza_buscas(thash *h, void **registros, int total_reg) {
+    int repeticoes = 10000;
+    for (int i = 0; i < repeticoes; i++) {
+        int idx = i % total_reg;
+        char *key = h->get_key(registros[idx]);
+        hash_busca(h, key);
+    }
+}
 
 //MENU pra testes Unitarios
 int menu(){
@@ -298,70 +260,302 @@ int menu(){
 
     return opcao_percentual;
 }
+void libera_registros(void **registros, int total_registros) {
+    for (int i = 0; i < total_registros; i++) {
+        free(registros[i]);
+    }
+}
 
 /*FUNÇÕES DE BUSCA- SEGUNDA PARTE*/
-void busca10 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+
+void busca10(const char *arquivo, int TAM, int tipo_hash) {
     thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.10f);
-    carregar_ceps(arquivo, &h);
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.10f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 10%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
     hash_apaga(&h);
-}
-void busca20 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.20f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca30 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.30f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca40 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.40f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca50 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.50f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca60 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.60f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca70 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.70f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca80 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.80f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca90 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.90f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
-}
-void busca99 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
-    thash h;
-    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.99f);
-    carregar_ceps(arquivo, &h);
-    hash_apaga(&h);
+    libera_registros(registros, total_reg);
 }
 
+void busca20(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
 
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.20f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 20%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+    tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca30(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.30f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 30%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca40(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.40f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 40%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca50(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.50f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 50%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca60(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.60f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 60%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca70(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.70f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 70%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca80(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.80f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 80%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca90(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.90f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 90%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+
+void busca99(const char *arquivo, int TAM, int tipo_hash) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, TAM, get_key, tipo_hash, 0.99f);
+
+    clock_t i1 = clock();
+    int qtd = insere_ceps(arquivo, &h, registros, &total_reg);
+    clock_t i2 = clock();
+
+    clock_t b1 = clock();
+    realiza_buscas(&h, registros, total_reg);
+    clock_t b2 = clock();
+
+    printf("[Hash %d - 99%%] Insercao: %.6f s | Busca: %.6f s | Registros: %d\n",
+           tipo_hash, (double)(i2 - i1) / CLOCKS_PER_SEC, (double)(b2 - b1) / CLOCKS_PER_SEC, qtd);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+}
+//FUNÇÃO INSERE 4.2
+int insere6100(const char *arquivo_csv, int tipo_hash,float taxa) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, 6100, get_key, tipo_hash, taxa);
+
+    clock_t inicio = clock();
+    int qtd = insere_ceps(arquivo_csv, &h, registros, &total_reg);
+    clock_t fim = clock();
+
+    double tempo = (double)(fim - inicio) / CLOCKS_PER_SEC;
+
+    printf("Insere 6100 buckets - Hash %d, Inseridos: %d | Tempo de insercao: %.6f s\n",
+           tipo_hash, qtd, tempo);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+    return 0;
+}
+
+int insere1000(const char *arquivo_csv, int tipo_hash, float taxa) {
+    thash h;
+    void *registros[10000];
+    int total_reg = 0;
+
+    hash_constroi(&h, 1000, get_key, tipo_hash, taxa); 
+
+    clock_t inicio = clock();
+    int qtd = insere_ceps(arquivo_csv, &h, registros, &total_reg);
+    clock_t fim = clock();
+
+    double tempo = (double)(fim - inicio) / CLOCKS_PER_SEC;
+
+    printf("Insere 1000 buckets - Hash %d, Inseridos: %d | Tempo de insercao: %.6f s\n",
+           tipo_hash, qtd, tempo);
+
+    hash_apaga(&h);
+    libera_registros(registros, total_reg);
+    return 0;
+}
+void calcula_overhead(double tempo_grande, double tempo_pequeno) {
+    double overhead = ((tempo_pequeno - tempo_grande) / tempo_grande) * 100.0;
+    printf("Overhead da tabela menor: %.2f%%\n", overhead);
+}
+void insere_taxas(const char *arquivo_csv, int tipo_hash) {
+    float taxas[] = {0.10f, 0.20f, 0.30f, 0.40f, 0.50f, 0.60f, 0.70f, 0.80f, 0.90f, 0.99f};
+    int num_taxas = sizeof(taxas) / sizeof(taxas[0]);
+
+    for (int i = 0; i < num_taxas; i++) {
+        float taxa = taxas[i];
+
+        printf("Comparando insercoes para %.0f%% de ocupacao (Hash %d)\n", taxa * 100, tipo_hash);
+
+        clock_t inicio_6100 = clock();
+        insere6100(arquivo_csv, tipo_hash, taxa);
+        clock_t fim_6100 = clock();
+        double tempo_6100 = (double)(fim_6100 - inicio_6100) / CLOCKS_PER_SEC;
+
+        clock_t inicio_1000 = clock();
+        insere1000(arquivo_csv, tipo_hash, taxa);
+        clock_t fim_1000 = clock();
+        double tempo_1000 = (double)(fim_1000 - inicio_1000) / CLOCKS_PER_SEC;
+
+        calcula_overhead(tempo_6100, tempo_1000);
+        printf("comparacao %.0f%%\n\n", taxa * 100);
+    }
+}
 int main(int argc, char* argv[]) {
 
     if (argc < 2) {
@@ -376,7 +570,6 @@ int main(int argc, char* argv[]) {
     int opcao_percentual;
     int percentual = 10; 
 
-
     printf("Escolha o tipo de hash:\n");
     printf("0 - Hash Simples\n");
     printf("1 - Hash Dupla\n");
@@ -387,21 +580,57 @@ int main(int argc, char* argv[]) {
     thash h;
 
     if (tipo_hash == 0 || tipo_hash == 1) {
-        opcao_percentual = menu();
-        hash_constroi(&h, tamanho_base, get_key, tipo_hash, opcao_percentual);
-
+        int opcao_percentual = menu(); 
+        float taxa;
+        if (opcao_percentual == 1) {
+            taxa = 0.1;
+            busca10(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 2) {
+            taxa = 0.2;
+            busca20(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 3) {
+            taxa = 0.3;
+            busca30(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 4) {
+            taxa = 0.4;
+            busca40(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 5) {
+            taxa = 0.5;
+            busca50(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 6) {
+            taxa = 0.6;
+            busca60(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 7) {
+            taxa = 0.7;
+            busca70(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 8) {
+            taxa = 0.8;
+            busca80(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 9) {
+            taxa = 0.9;
+            busca90(arquivo_csv, 6100, tipo_hash);
+        } else if (opcao_percentual == 0) {
+            taxa = 0.99;
+            busca99(arquivo_csv, 6100, tipo_hash);
+        }
+        printf("\n---------\n");
     }
-    else if( tipo_hash == 2){
-        hash_constroi(&h, tamanho_base, get_key, tipo_hash, opcao_percentual);
-
+    if (tipo_hash == 2) {
+        for (int tipo = 0; tipo <= 1; tipo++) {
+            busca10(arquivo_csv, 6100, tipo);
+            busca20(arquivo_csv, 6100, tipo);
+            busca30(arquivo_csv, 6100, tipo);
+            busca40(arquivo_csv, 6100, tipo);
+            busca50(arquivo_csv, 6100, tipo);
+            busca60(arquivo_csv, 6100, tipo);
+            busca70(arquivo_csv, 6100, tipo);
+            busca80(arquivo_csv, 6100, tipo);
+            busca90(arquivo_csv, 6100, tipo);
+            busca99(arquivo_csv, 6100, tipo);
+            printf("\n------Comparacao entre tabela 6100 e 1000 buckets------\n");
+            insere_taxas(arquivo_csv, tipo);
+        }        
     }
-
-    carregar_ceps(arquivo_csv, &h);
-    
-
-
-   
-    hash_apaga(&h);
 
     return 0;
 }

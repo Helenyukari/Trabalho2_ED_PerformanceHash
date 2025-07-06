@@ -14,6 +14,21 @@
 
 ---
 
+### Pra acessar o terminal (UBUNTU NO WINDOWS):
+
+verique se existe WSL:
+
+    wsl --list --verbose
+    
+Aperte Win + R, digite wsl e pressione Enter.
+    OU se quiser utilizar o WSL no powershell :
+  isso vai ativar o ubunto no terminal
+
+    wsl -d Ubuntu
+
+  caminho da pasta:
+    
+    cd OneDrive/Área\ de\ Trabalho/Quinto\ Semestre/Estrutura\ de\ Dados/Trabalho_2/
 
 ### ❔ Como executar  👩‍💻:
 
@@ -23,11 +38,63 @@ para executar o codigo hash.c
 compile nomeando o ./exe:
 
     gcc -o codigo .\hash.c 
-
+    ou
+    gcc -o codigo hash.c 
 
 execute enviando uma argumento, nesse caso a base de dados em csv:
 
     .\codigo.exe .\Lista_de_CEPs.csv
+    ou
+     ./codigo Lista_de_CEPs.csv 
+
+
+Gere o relatório com gprof:
+ 
+    gprof ./codigo gmon.out > relatorio.txt
+
+
+### Para utilizar o **gporf**, estou usando WSL (Windows Subsystem for Linux), que simula um ambiente Linux dentro do Windows
+
+Como funciona comandos:
+
+### Compilar com -pg
+
+    gcc -pg -o codigo hash.c
+
+  **O que faz:**
+  * gcc: chama o compilador C.
+  * -pg: habilita a geração de dados para o gprof (profiling).
+  * -o codigo: define o nome do programa final como codigo.
+  * hash.c: é o seu arquivo fonte que será compilado.**
+
+
+
+### Executar o programa
+
+    ./codigo Lista_de_CEPs.csv
+
+   **O que faz:**
+
+  * ./codigo: executa o programa codigo (que compilou antes).
+  * Lista_de_CEPs.csv: é o caminho do arquivo CSV com os dados.
+  
+### Gerar o relatório com gprof 
+
+    gprof ./codigo gmon.out > relatorio.txt
+
+  **O que faz:**
+
+  * gprof: analisa os dados gerados pelo programa para mostrar o tempo gasto em cada função.
+  * ./codigo: nome do executável.
+  * gmon.out: arquivo gerado automaticamente após rodar o programa com -pg.
+  * relatorio.txt: salva a análise no arquivo de texto relatorio.txt.
+
+### Ler o relatório
+
+    less relatorio.txt
+    //Aperte q para sair do less.
+    
+
 
  🐙🐙🐙como fiz pra inicializar um repositorio e guardar os arquivos🐙🐙🐙 (OBS: só pra mim lembrar)
 
@@ -66,51 +133,6 @@ execute enviando uma argumento, nesse caso a base de dados em csv:
 
 
 
-### Para utilizar o **gporf**, estou usando WSL (Windows Subsystem for Linux), que simula um ambiente Linux dentro do Windows
 
-comandos
-
-### Compilar com -pg
-
-    gcc -pg -o codigo hash.c
-
-  **O que faz:**
-  * gcc: chama o compilador C.
-  * -pg: habilita a geração de dados para o gprof (profiling).
-  * -o codigo: define o nome do programa final como codigo.
-  * hash.c: é o seu arquivo fonte que será compilado.**
-
-
-
-### Executar o programa
-
-    ./codigo Lista_de_CEPs.csv 60000
-
-   **O que faz:**
-
-  * ./codigo: executa o programa codigo (que você compilou antes).
-  * Lista_de_CEPs.csv: é o caminho do arquivo CSV com os dados.
-  * 60000: é o argumento opcional que define o limite de registros a serem lidos (como você programou).
-  
-### Gerar o relatório com gprof 
-
-    gprof ./codigo gmon.out > relatorio.txt
-
-  **O que faz:**
-
-  * gprof: analisa os dados gerados pelo programa para mostrar o tempo gasto em cada função.
-  * ./codigo: nome do executável.
-  * gmon.out: arquivo gerado automaticamente após rodar o programa com -pg.
-  * relatorio.txt: salva a análise no arquivo de texto relatorio.txt.
-
-### Ler o relatório
-
-    less relatorio.txt
-    //Aperte q para sair do less.
-    
-
-### Pra mim acessar o terminal:
-
-    perte Win + R, digite wsl e pressione Enter.
-
-    cd OneDrive/Área\ de\ Trabalho/Quinto\ Semestre/Estrutura\ de\ Dados/Trabalho_2/
+ gcc -g -fsanitize=address -o prog hash.c
+ ./prog Lista_de_CEPs.csv
