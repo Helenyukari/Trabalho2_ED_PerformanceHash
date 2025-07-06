@@ -31,6 +31,7 @@ execute enviando uma argumento, nesse caso a base de dados em csv:
 
  🐙🐙🐙como fiz pra inicializar um repositorio e guardar os arquivos🐙🐙🐙 (OBS: só pra mim lembrar)
 
+ ### Criar um repositorio 
     git init
 
     git add .
@@ -42,3 +43,74 @@ execute enviando uma argumento, nesse caso a base de dados em csv:
     branch -M main
     
     git push -u origin main
+
+  ## para commitar em uma nova Branch
+
+    git checkout -b nome-da-sua-nova-branch
+
+    git add .
+
+    git commit -m "Mensagem descritiva do que você fez"
+
+    git push -u origin nome-da-sua-nova-branch
+
+  ### Subir as atualizações no repositorio
+
+  **Resumo:**
+
+    git add — adiciona os arquivos para serem commitados
+
+    git commit -m "mensagem" — cria o commit localmente
+
+    git push — envia os commits locais para o repositório remoto (GitHub)
+
+
+
+### Para utilizar o **gporf**, estou usando WSL (Windows Subsystem for Linux), que simula um ambiente Linux dentro do Windows
+
+comandos
+
+### Compilar com -pg
+
+    gcc -pg -o codigo hash.c
+
+  **O que faz:**
+  * gcc: chama o compilador C.
+  * -pg: habilita a geração de dados para o gprof (profiling).
+  * -o codigo: define o nome do programa final como codigo.
+  * hash.c: é o seu arquivo fonte que será compilado.**
+
+
+
+### Executar o programa
+
+    ./codigo Lista_de_CEPs.csv 60000
+
+   **O que faz:**
+
+  * ./codigo: executa o programa codigo (que você compilou antes).
+  * Lista_de_CEPs.csv: é o caminho do arquivo CSV com os dados.
+  * 60000: é o argumento opcional que define o limite de registros a serem lidos (como você programou).
+  
+### Gerar o relatório com gprof 
+
+    gprof ./codigo gmon.out > relatorio.txt
+
+  **O que faz:**
+
+  * gprof: analisa os dados gerados pelo programa para mostrar o tempo gasto em cada função.
+  * ./codigo: nome do executável.
+  * gmon.out: arquivo gerado automaticamente após rodar o programa com -pg.
+  * relatorio.txt: salva a análise no arquivo de texto relatorio.txt.
+
+### Ler o relatório
+
+    less relatorio.txt
+    //Aperte q para sair do less.
+    
+
+### Pra mim acessar o terminal:
+
+    perte Win + R, digite wsl e pressione Enter.
+
+    cd OneDrive/Área\ de\ Trabalho/Quinto\ Semestre/Estrutura\ de\ Dados/Trabalho_2/

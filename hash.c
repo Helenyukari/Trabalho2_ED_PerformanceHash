@@ -5,7 +5,7 @@
 #include <assert.h>
 #define SEED1    0x12345678
 #define SEED2    0x87654321 //nova seed
-#include <time.h>
+#include <time.h> // calcular o tempo
 
 
 typedef struct {
@@ -18,7 +18,6 @@ typedef struct {
      float taxa_ocupacao; //adicionado, calcula o quão cheia esta a hash
      int tipo_hash; // 0 = simples e 1 = duplo  
 }thash;
-
 
 uint32_t hashf(const char* str, uint32_t h){
     /* One-byte-at-a-time Murmur hash 
@@ -104,7 +103,6 @@ int hash_insere(thash *h, void *bucket) {
     return EXIT_FAILURE;
 }
 
-
 //adicionando o tipo de hash e a taxa de ocupação
 int hash_constroi(thash * h,int nbuckets, char * (*get_key)(void *), int tipo_hash, float taxa ){
     h->table =calloc(sizeof(void *),nbuckets+1);
@@ -130,10 +128,6 @@ void *hash_busca(thash *h, const char *key) {
     int pos;
 
     for (int i = 0; i < h->max; i++) {
-        // if (h->tipo_hash == 1)
-        //     pos = (h1 + i * h2) % h->max;  // hash duplo
-        // else
-        //     pos = (h1 + i) % h->max;       // hash simples
         pos = calcular_posicao(h, key, i);
 
         // Se não encontrar nada = encontrou o proxima posição vazia   
@@ -145,7 +139,7 @@ void *hash_busca(thash *h, const char *key) {
         if (h->table[pos] != h->deleted) {
             void *reg = (void *)h->table[pos];
             if (strcmp(h->get_key(reg), key) == 0) {
-                printf("Registro Encontrado!!!\n");
+                // printf("Registro Encontrado!!!\n");
                 return reg; // achou!
             }
         }
@@ -155,13 +149,10 @@ void *hash_busca(thash *h, const char *key) {
     return NULL; 
 }
 
-
-
 /* ajustado com o calculo do h1 e h2 */
 int hash_remove(thash *h, const char *key) {
     uint32_t h1 = _h1(key, h->max);
     uint32_t h2 = _h2(key, h->max);
-
 
    int pos;
     for (int i = 0; i < h->max; i++) {
@@ -170,7 +161,6 @@ int hash_remove(thash *h, const char *key) {
         // else
         //     pos = (h1 + i) % h->max;      // hash simples
         pos = calcular_posicao(h, key, i);
-
 
         if (h->table[pos] != 0) {
             void *reg = (void *) h->table[pos];
@@ -189,7 +179,6 @@ int hash_remove(thash *h, const char *key) {
     return EXIT_FAILURE;
 }
 
-
 /*não alterado*/
 void hash_apaga(thash *h){
     int pos;
@@ -202,7 +191,6 @@ void hash_apaga(thash *h){
     }
     free(h->table);
 }
-
 
 //Primeira alteração: cep,  nome da cidade e o estado.
 typedef struct{
@@ -228,9 +216,8 @@ void * aloca_reg(char * nome, char * cep, char * estado){
     return reg;
 }
 
-
-//Lê o csv e inserie na hash
-int carregar_ceps(const char *arquivo_csv, thash *h, int limite) {
+//LÊ o Arquivo e guarda na hash --> modifiquei e coloquei pra busca tmb
+int carregar_ceps(const char *arquivo_csv, thash *h) {
     FILE *fp = fopen(arquivo_csv, "r");
     if (!fp) {
         perror("Erro ao abrir arquivo");
@@ -239,87 +226,182 @@ int carregar_ceps(const char *arquivo_csv, thash *h, int limite) {
 
     char linha[256];
     int linha_atual = 0;
-    int qtd = 0;
+    int qtd = 0; //aqui vamos contar qtd de registros inseridos
 
-    clock_t inicio = clock();
+    // Lista dos CEPs inseridos para depois buscar
+    char ceps_para_buscar[10000][6]; 
+    int total_ceps = 0;
+
+    clock_t inicio_insercao = clock();
 
     while (fgets(linha, sizeof(linha), fp)) {
-        if (linha_atual++ == 0) {
-            continue; // Pula o cabeçalho
-        }
-        //strtok pega um pedaço do texto
+        if (linha_atual++ == 0) continue; // pula cabeçalho
+
         char *estado = strtok(linha, ";");
         char *cidade = strtok(NULL, ";");
         char *cep = strtok(NULL, ";\n");
 
         if (estado && cidade && cep) {
             void *reg = aloca_reg(cidade, cep, estado);
-            qtd++;
             hash_insere(h, reg);
+
+            if (total_ceps < 10000) {
+                strncpy(ceps_para_buscar[total_ceps], cep, 5);
+                ceps_para_buscar[total_ceps][5] = '\0';
+                total_ceps++;
+            }
+
+            qtd++;
         }
 
-        // Limite de inserção
-        if (limite > 0 && qtd >= limite) {
-            break;
-        }
+        // if (limite > 0 && qtd >= limite) break;
     }
 
-    clock_t fim = clock();
+    clock_t fim_insercao = clock();
     fclose(fp);
-    //transforma o tempo medido em segundos
-    double tempo = (double)(fim - inicio) / CLOCKS_PER_SEC;
 
-    printf("Tempo de insercao: %f segundos\n", tempo);
-    printf("Quantidade de elementos %d\n", qtd);
+    double tempo_insercao = (double)(fim_insercao - inicio_insercao) / CLOCKS_PER_SEC;
+
+    // --------------------- Busca --------------------
+    clock_t inicio_busca = clock();
+
+    int repeticoes = 10000;
+    for (int i = 0; i < repeticoes; i++) {
+        int indice = i % total_ceps;
+        hash_busca(h, ceps_para_buscar[indice]);
+    }
+
+    clock_t fim_busca = clock();
+    double tempo_busca = (double)(fim_busca - inicio_busca) / CLOCKS_PER_SEC;
+
+    // --------------------- Saída --------------------
+    printf("Tempo de insercao: %f segundos\n", tempo_insercao);
+    printf("Tempo de busca:    %f segundos\n", tempo_busca);
+    printf("Quantidade de elementos inseridos: %d\n", qtd);
 
     return EXIT_SUCCESS;
 }
 
 
+//MENU pra testes Unitarios
+int menu(){
+   
+    int opcao_percentual;
+    printf("Escolha o percentual de insercao:\n");
+    for (int i = 1; i <= 9; i++) {
+        printf("%d - %d%%\n", i, i * 10);
+    }
+    printf("0 - 99%%\n");
+    scanf("%d", &opcao_percentual);
+    printf("Percentual escolhido: %d%%\n", opcao_percentual * 10);
+
+
+    return opcao_percentual;
+}
+
+/*FUNÇÕES DE BUSCA- SEGUNDA PARTE*/
+void busca10 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.10f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca20 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.20f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca30 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.30f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca40 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.40f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca50 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.50f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca60 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.60f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca70 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.70f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca80 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.80f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca90 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.90f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+void busca99 (const char *arquivo, int TAMANHO_TABELA,int tipo_hash) {
+    thash h;
+    hash_constroi(&h, TAMANHO_TABELA, get_key, tipo_hash, 0.99f);
+    carregar_ceps(arquivo, &h);
+    hash_apaga(&h);
+}
+
+
 int main(int argc, char* argv[]) {
-        // teste_busca_simples();
 
     if (argc < 2) {
         printf("Uso: %s <arquivo_csv>\n", argv[0]);
         return EXIT_FAILURE;
     }
-    //aqui o codigo salva a quantidade de entradas
-    int limite = 0;
-    if (argc >= 3) {
-       limite = atoi(argv[2]); // converte argumento para inteiro
+
+    const char *arquivo_csv = argv[1];
+    int tamanho_base = 6100;
+   
+    int tipo_hash;
+    int opcao_percentual;
+    int percentual = 10; 
+
+
+    printf("Escolha o tipo de hash:\n");
+    printf("0 - Hash Simples\n");
+    printf("1 - Hash Dupla\n");
+    printf("2 - Executar ambas\n");
+    printf("Opcao: \n");
+    scanf("%d", &tipo_hash);
+    //Cria e testa a hash
+    thash h;
+
+    if (tipo_hash == 0 || tipo_hash == 1) {
+        opcao_percentual = menu();
+        hash_constroi(&h, tamanho_base, get_key, tipo_hash, opcao_percentual);
+
     }
+    else if( tipo_hash == 2){
+        hash_constroi(&h, tamanho_base, get_key, tipo_hash, opcao_percentual);
+
+    }
+
+    carregar_ceps(arquivo_csv, &h);
+    
 
 
    
-    const char *arquivo_csv = argv[1]; // salva em um ponteiro o nome do csv .\Lista_de_CEPs.csv
-
-    thash h;
-    int nbuckets = 1000;
-    float taxa = 0.75;
-    int tipo_hash = 1; // 0 = simples, 1 = dupla
-
-    if (hash_constroi(&h, nbuckets, get_key, tipo_hash, taxa) != EXIT_SUCCESS) {
-        printf("Erro ao construir tabela hash.\n");
-        return EXIT_FAILURE;
-    }
-
-    if (carregar_ceps(arquivo_csv, &h) != EXIT_SUCCESS) {
-        printf("Erro ao carregar dados do CSV.\n");
-        return EXIT_FAILURE;
-    }
-
-    // Teste de busca
-    const char *busca = "69945"; // Exemplo: CEP Inicial de Acrelândia
-    treg *resultado = (treg *)hash_busca(&h, busca);
-    if (resultado)
-        printf("CEP: %s - Cidade: %s - Estado: %s\n", resultado->cep, resultado->cidade, resultado->estado);
-    else
-        printf("CEP %s não encontrado.\n", busca);
-
-
-    //teste de tempo
-    // carregar_ceps(tipo_hash, taxa,tamanho, qtd_registro);
-
     hash_apaga(&h);
+
     return 0;
 }
