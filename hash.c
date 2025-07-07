@@ -54,9 +54,7 @@ int hash_insere(thash *h, void *bucket) {
     if ((float)(h->size + 1) / h->max > h->taxa_ocupacao) {
 
         int tam_novo = h->max *2;
-        // Nova tabela
-         uintptr_t *nova_tabela = calloc(tam_novo, sizeof(void *));
-        // Guarda os dados antigos
+        uintptr_t *nova_tabela = calloc(tam_novo, sizeof(void *));
         uintptr_t *tabela_antiga = h->table;
         int max_antigo = h->max;
 
