@@ -14,6 +14,25 @@
 
 ---
 
+### 📽️ Vídeo explicativo do projeto:
+
+👉 [Clique aqui para assistir ao vídeo do projeto no Google Drive](https://drive.google.com/drive/folders/1gLSK5x1xYvD9YQbqhaOShruLRPdax1_X?usp=sharing)
+
+---
+
+### 📊 Resultados
+
+Para os experimentos de desempenho com busca:
+
+- Foram medidas as funções `busca10`, `busca20`, ..., `busca99`, representando diferentes taxas de ocupação da tabela hash.
+- O tempo de execução foi obtido com `gprof`.
+- Gráficos comparativos foram gerados entre **Hash Simples** e **Hash Duplo**, mostrando como o desempenho de busca varia com a taxa de ocupação.
+- Além disso, foi avaliado o tempo de inserção em tabelas com tamanhos iniciais diferentes (6100 e 1000 buckets), para analisar o impacto do redimensionamento dinâmico da estrutura.
+
+*Obs: Consulte o relatório `relatorio.txt` e o gráfico gerado para detalhes numéricos e visuais.*
+
+---
+
 ### Pra acessar o terminal (UBUNTU NO WINDOWS):
 
 verique se existe WSL:
